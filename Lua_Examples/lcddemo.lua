@@ -1,33 +1,47 @@
 -- init spi first
 
 if dispType == nil then
-	dispType = lcd.ILI9341
+	dispType = lcd.XADOW_V0
+	-- dispType = lcd.XADOW_V1
+	-- dispType = lcd.ILI9341
 	-- dispType = lcd.ST7735B -- probably will work
 	-- dispType = lcd.ST7735  -- try if not
 	-- dispType = lcd.ST7735G -- or this one
 end
 
-lcd_OK = spi.setup({speed=10000, cs=2, dc=1})
-if lcd_OK ~= 0 then
-    print("SPI not initialized")
-    return
+if dispType < 8 then
+	-- if not using Xadow display we have to initialize SPI interface
+	lcd_OK = spi.setup({speed=10000, cs=2, dc=1})
+	if lcd_OK ~= 0 then
+		print("SPI not initialized")
+		return
+	end
 end
 
-lcd_OK = lcd.init(dispType,lcd.PORTRAIT_FLIP)
-if lcd_OK ~= 0 then
+lcd.init(dispType,lcd.PORTRAIT_FLIP)
+if lcd.gettype() < 0 then
 	print("LCD not initialized")
 	return
 end
 
+fontnames = {
+	lcd.FONT_DEFAULT,
+	lcd.FONT_7SEG,
+	"@font\\DejaVuSans18.fon",
+	"@font\\DotMatrix_M.fon",
+	"@font\\OCR_A_Extended_M.fon"
+}
+
+-- print display header
 function header(tx)
-        sys.random(1000,0,1)
+	sys.random(1000,0,1)
 	maxx, maxy = lcd.getscreensize()
 	lcd.clear()
 	lcd.setcolor(lcd.CYAN)
 	if maxx < 240 then
-		lcd.setfont(lcd.FONT_SMALL)
+		lcd.setfont("@font\\SmallFont.fon")
 	else
-		lcd.setfont(lcd.FONT_DEJAVU12)
+		lcd.setfont(lcd.FONT_DEFAULT)
 	end
 	miny = lcd.getfontheight() + 5
 	lcd.rect(0,0,maxx-1,miny-1,lcd.OLIVE,{8,16,8})
@@ -36,6 +50,7 @@ function header(tx)
 	lcd.settransp(0)
 end
 
+-- Display available fonts
 function dispFont(sec)
 	header("DISPLAY FONTS")
 
@@ -46,13 +61,6 @@ function dispFont(sec)
 		tx = "Hi from LoBo"
 	end
 	local starty = miny + 4
-	if maxx < maxy then
-		-- display only in portrait mode
-		lcd.setcolor(lcd.ORANGE)
-		lcd.setfont(lcd.FONT_7SEG)
-		lcd.write(0,starty,"1234567890")
-		starty = starty + lcd.getfontheight() + 4
-	end
 
 	local x,y
 	local n = sys.tick()
@@ -61,10 +69,14 @@ function dispFont(sec)
 		x = 0
 		local i,j
 		for i=1, 3, 1 do
-			for j=0, lcd.FONT_7SEG-1, 1 do
+			for j=1, #fontnames, 1 do
 				lcd.setcolor(sys.random(0xFFFF))
-				lcd.setfont(j)
-				lcd.write(x,y,tx)
+				lcd.setfont(fontnames[j])
+				if j ~= 2 then
+					lcd.write(x,y,tx)
+				else
+					lcd.write(x,y,"-12.45/")
+				end
 				y = y + lcd.getfontheight()
 				if y > (maxy-lcd.getfontheight()) then
 					break
@@ -94,17 +106,23 @@ function fontDemo(sec, rot)
 	lcd.setclipwin(0,miny,maxx,maxy)
 	tx = "RePhone"
 	local x, y, color, i
-        local n = sys.tick()
-        while sys.elapsed(n) < (sec*1000000) do
+	local n = sys.tick()
+	while sys.elapsed(n) < (sec*1000000) do
 		if rot == 1 then
 			lcd.setrot(math.floor(sys.random(359)/5)*5);
 		end
-		for i=0, lcd.FONT_7SEG-1, 1 do
-			lcd.setcolor(sys.random(0xFFFF))
-			lcd.setfont(i)
-			x = sys.random(maxx-8)
-			y = sys.random(maxy-lcd.getfontheight(),miny)
-			lcd.write(x,y,tx)
+		for i=1, #fontnames, 1 do
+			if (rot == 0) or (i ~= 1) then
+				lcd.setcolor(sys.random(0xFFFF))
+				lcd.setfont(fontnames[i])
+				x = sys.random(maxx-8)
+				y = sys.random(maxy-lcd.getfontheight(),miny)
+				if i ~= 2 then
+					lcd.write(x,y,tx)
+				else
+					lcd.write(x,y,"-12.45/")
+				end
+			end
 		end
 	end
 	lcd.resetclipwin()
@@ -116,15 +134,15 @@ function lineDemo(sec)
 
 	lcd.setclipwin(0,miny,maxx,maxy)
 	local x1, x2,y1,y2,color
-        local n = sys.tick()
-        while sys.elapsed(n) < (sec*1000000) do
+	local n = sys.tick()
+	while sys.elapsed(n) < (sec*1000000) do
 		x1 = sys.random(maxx-4)
 		y1 = sys.random(maxy-4,miny)
 		x2 = sys.random(maxx-1)
 		y2 = sys.random(maxy-1,miny)
 		color = sys.random(0xFFFF)
 		lcd.line(x1,y1,x2,y2,color)
-    end;
+	end;
 	lcd.resetclipwin()
 end;
 
@@ -137,8 +155,8 @@ function circleDemo(sec,dofill)
 
 	lcd.setclipwin(0,miny,maxx,maxy)
 	local x, y, r, color, fill
-        local n = sys.tick()
-        while sys.elapsed(n) < (sec*1000000) do
+	local n = sys.tick()
+	while sys.elapsed(n) < (sec*1000000) do
 		x = sys.random(maxx-2,4)
 		y = sys.random(maxy-2,miny+2)
 		if x < y then
@@ -153,7 +171,7 @@ function circleDemo(sec,dofill)
 		else
 			lcd.circle(x,y,r,color)
 		end
-    end;
+	end;
 	lcd.resetclipwin()
 end;
 
@@ -166,8 +184,8 @@ function rectDemo(sec,dofill)
 
 	lcd.setclipwin(0,miny,maxx,maxy)
 	local x, y, w, h, color, fill
-        local n = sys.tick()
-        while sys.elapsed(n) < (sec*1000000) do
+	local n = sys.tick()
+	while sys.elapsed(n) < (sec*1000000) do
 		x = sys.random(maxx-2,4)
 		y = sys.random(maxy-2,miny)
 		w = sys.random(maxx-x,2)
@@ -179,7 +197,7 @@ function rectDemo(sec,dofill)
 		else
 			lcd.rect(x,y,w,h,color)
 		end
-    end;
+	end;
 	lcd.resetclipwin()
 end;
 
@@ -192,8 +210,8 @@ function triangleDemo(sec,dofill)
 
 	lcd.setclipwin(0,miny,maxx,maxy)
 	local x1, y1, x2, y2, x3, y3, color, fill
-        local n = sys.tick()
-        while sys.elapsed(n) < (sec*1000000) do
+	local n = sys.tick()
+	while sys.elapsed(n) < (sec*1000000) do
 		x1 = sys.random(maxx-2,4)
 		y1 = sys.random(maxy-2,miny)
 		x2 = sys.random(maxx-2,4)
@@ -207,7 +225,7 @@ function triangleDemo(sec,dofill)
 		else
 			lcd.triangle(x1,y1,x2,y2,x3,y3,color)
 		end
-    end;
+	end;
 	lcd.resetclipwin()
 end;
 
@@ -216,13 +234,13 @@ function pixelDemo(sec)
 
 	lcd.setclipwin(0,miny,maxx,maxy)
 	local x, y, color
-        local n = sys.tick()
-        while sys.elapsed(n) < (sec*1000000) do
+	local n = sys.tick()
+	while sys.elapsed(n) < (sec*1000000) do
 		x = sys.random(maxx-1)
 		y = sys.random(maxy-1,miny)
 		color = sys.random(0xFFFF)
 		lcd.putpixel(x,y,color)
-        end;
+	end;
 	lcd.resetclipwin()
 	if (maxx > maxy) then
 		if os.exists("nature_160x123.img") ~= 0 then
@@ -237,7 +255,7 @@ function pixelDemo(sec)
 			lcd.write(lcd.CENTER,miny+4,"Image not found")
 		end
 	end
-end;
+end
 
 function intro(sec)
 	maxx, maxy = lcd.getscreensize()
@@ -248,7 +266,7 @@ function intro(sec)
 	end
 	lcd.setrot(0);
 	lcd.setcolor(lcd.BLACK)
-	lcd.setfont(lcd.FONT_DEJAVU18)
+	lcd.setfont(lcd.FONT_DEFAULT)
 	local y = (maxy/2) - (lcd.getfontheight() / 2)
 	lcd.settransp(1)
 	lcd.write(lcd.CENTER,y,"RePhone")
@@ -258,7 +276,7 @@ function intro(sec)
 	for i=1, sec, 1 do
 		msleep(1000)
 	end
-end;
+end
 
 function lcdDemo(sec, orient)
 	lcd.setorient(orient)
@@ -292,7 +310,7 @@ function fullDemo(sec, rpt)
 	while rpt > 0 do
 		lcd.setrot(0);
 		lcd.setcolor(lcd.CYAN)
-		lcd.setfont(lcd.FONT_DEJAVU12)
+		lcd.setfont(lcd.FONT_DEFAULT)
 
 		lcdDemo(sec, lcd.LANDSCAPE)
 		msleep(5000)
@@ -305,4 +323,56 @@ function fullDemo(sec, rpt)
 	end
 end
 
-fullDemo(6, 1)
+function cotmr_cb_dummy()
+end
+
+coRun = 3000
+coTmr = timer.create(20, cotmr_cb_dummy, 1)
+
+function rectDemoCo()
+	local tx = "CO RECTANGLE"
+	header(tx)
+	
+	lcd.setclipwin(0,miny,maxx,maxy)
+	local x, y, w, h, color, fill
+	while coRun > 0 do
+		coRun = coRun - 1
+		--print("Run = "..coRun)
+		x = sys.random(maxx-2,4)
+		y = sys.random(maxy-2,miny)
+		w = sys.random(maxx-x,2)
+		h = sys.random(maxy-y,2)
+		color = sys.random(0xFFFF)
+		fill = sys.random(0xFFFF)
+		lcd.rect(x,y,w,h,color,fill)
+		
+		timer.resume(coTmr)
+		coroutine.yield()
+		timer.pause(coTmr)
+	end;
+	lcd.resetclipwin()
+end
+
+function cotmr_cb()
+	if coRun > 0 then
+		if coroutine.status(CoRect) == "suspended" then
+			coroutine.resume(CoRect)
+		end
+	else
+		if coroutine.status(CoRect) == "suspended" then
+			coroutine.resume(CoRect)
+		end
+		timer.pause(coTmr)
+	end
+end
+
+-- create a coroutine with rectDemoCo as the entry
+CoRect = coroutine.create(rectDemoCo)
+timer.changecb(coTmr, cotmr_cb)
+
+header("RePhone")
+
+print(coroutine.status(CoRect))
+print(coTmr)
+
+--fullDemo(6, 1)

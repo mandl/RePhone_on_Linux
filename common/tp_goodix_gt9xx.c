@@ -8,21 +8,22 @@
 #include "vmdrv_tp.h"
 #include "vmlog.h"
 #include "vmdatetime.h"
+#include "vmthread.h"
 
 #define TPD_RESET_ISSUE_WORDAROUND
 #define CTP_MAX_RESET_COUNT 3
 
 const VMUINT8 gpio_ctp_reset_pin = 19;
 const VMUINT8 gpio_ctp_i2c_scl_pin = 1;
-const VMUINT8 gpio_ctp_i2c_sda_pin = 2;
+//====================================
+const VMUINT8 gpio_ctp_i2c_sda_pin = 2;		// Software I2C
+//const VMUINT8 gpio_ctp_i2c_sda_pin = 0xFF;	// Hardware I2C (NOT WORKING)
+//====================================
 const VMUINT8 gpio_ctp_eint_pin = 52;
 
 VM_DCL_HANDLE gpio_ctp_eint_handle;
 
-VMUINT32 CTP_DELAY_TIME = 100;
-
-static VMUINT32* VSIM1_CON2 = (VMUINT32*)0xA0700188;
-static VMUINT32* VSIM1_CON0 = (VMUINT32*)0xA0700180;
+VMUINT32 CTP_DELAY_TIME = 100;  // hardware i2c speed
 
 VMUINT8 gt9xx_config[] = {
     0x43, 0xF0, 0x00, 0xF0, 0x00, 0x0A, 0x05, 0x00, 0x01, 0x08, 0x28, 0x0F, 0x50, 0x32, 0x03, 0x05, 0x00, 0x00, 0x00,
@@ -37,7 +38,7 @@ VMUINT8 gt9xx_config[] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x47, 0x01
 };
 
-void delay_ms(VMUINT32 millisecs)
+static void delay_ms(VMUINT32 millisecs)
 {
     VMUINT32 timeStop;
     VMUINT32 timeStart;
@@ -84,8 +85,9 @@ static VM_DRV_TP_BOOL ctp_goodix_gt9xx_get_information(ctp_info_t* ctp_info)
     VMUINT8 cfg;
 
     ret = CTP_I2C_read(CTP_VERSION_INFO_REG, (VMUINT8*)ctp_info, sizeof(ctp_info_t));
-    ret = CTP_I2C_read(CTP_CONFIG_REG_BASE, &cfg, 1);
+    //if (ret != VM_DRV_TP_TRUE) return VM_DRV_TP_FALSE;
 
+    ret = CTP_I2C_read(CTP_CONFIG_REG_BASE, &cfg, 1);
     return ret;
 }
 
@@ -95,9 +97,7 @@ VM_DRV_TP_BOOL ctp_goodix_gt9xx_set_configuration(void)
     VMUINT8* cfg_p;
     ctp_info_t ctp_info;
 
-    if(ctp_goodix_gt9xx_get_information(&ctp_info) != VM_DRV_TP_TRUE) {
-        return VM_DRV_TP_FALSE;
-    }
+    if (ctp_goodix_gt9xx_get_information(&ctp_info) != VM_DRV_TP_TRUE) return VM_DRV_TP_FALSE;
 
     ret = CTP_I2C_send(CTP_CONFIG_REG_BASE, gt9xx_config, sizeof(gt9xx_config));
 
@@ -110,16 +110,12 @@ static VM_DRV_TP_PEN_STATE ctp_goodix_gt9xx_hisr(void)
 
     CTP_I2C_read(CTP_TOUCH_INFO_REG_BASE, &lvalue, 1);
 
-    if(lvalue & CTP_STAT_NUMBER_TOUCH) {
-        return VM_DRV_TP_DOWN;
-    } else {
-        return VM_DRV_TP_UP;
-    }
+    if (lvalue & CTP_STAT_NUMBER_TOUCH) return VM_DRV_TP_DOWN;
+    else return VM_DRV_TP_UP;
 }
 
 void ctp_init_EINT(void)
 {
-
     vm_dcl_eint_control_config_t eint_config;
     vm_dcl_eint_control_sensitivity_t sens_data;
     vm_dcl_eint_control_hw_debounce_t deboun_time;
@@ -171,7 +167,8 @@ void ctp_init_EINT(void)
         gpio_ctp_eint_handle,
         VM_DCL_EINT_COMMAND_CONFIG,
         (void*)&eint_config); /* Please call this api finally, because we will unmask eint in this command. */
-    if(status != VM_DCL_STATUS_OK) {
+
+    if (status != VM_DCL_STATUS_OK) {
         vm_log_info("VM_EINT_CMD_CONFIG = %d", status);
     }
 
@@ -193,19 +190,16 @@ static VM_DRV_TP_BOOL ctp_goodix_gt9xx_init(void)
 
     VMUINT8 i = 0;
 
+    volatile VMUINT32* VSIM1_CON2 = (VMUINT32*)0xA0700188;
+    volatile VMUINT32* VSIM1_CON0 = (VMUINT32*)0xA0700180;
+
+
     // turn on VSIM1
     *VSIM1_CON2 = *VSIM1_CON2 | 0x0002;
     *VSIM1_CON0 = *VSIM1_CON0 | 0x0001;
 
     // init i2c
-    if(gpio_ctp_i2c_sda_pin != 0xFF) {
-        sda_handle = vm_dcl_open(VM_DCL_GPIO, gpio_ctp_i2c_sda_pin);
-        scl_handle = vm_dcl_open(VM_DCL_GPIO, gpio_ctp_i2c_scl_pin);
-
-        vm_dcl_control(sda_handle, VM_DCL_GPIO_COMMAND_SET_MODE_0, NULL);
-        vm_dcl_control(scl_handle, VM_DCL_GPIO_COMMAND_SET_MODE_0, NULL);
-        CTP_DELAY_TIME = 3;
-    }
+    if (gpio_ctp_i2c_sda_pin != 0xFF) CTP_DELAY_TIME = 2;
 
     ctp_i2c_configure(CTP_SLAVE_ADDR, CTP_DELAY_TIME);
 
@@ -232,16 +226,16 @@ static VM_DRV_TP_BOOL ctp_goodix_gt9xx_init(void)
     ctp_init_EINT();
 
     ack = ctp_goodix_gt9xx_set_configuration();
-    if(ack == VM_DRV_TP_FALSE) {
-        vm_log_info("ctp_goodix_gt9xx_set_configuration fail!!!");
+    if (ack == VM_DRV_TP_FALSE) {
+        //vm_log_error("ctp_goodix_gt9xx_set_configuration fail!!!");
         return VM_DRV_TP_FALSE;
     }
-    vm_log_info("ctp_goodix_gt9xx_set_configuration OK!!!");
+    //vm_log_info("ctp_goodix_gt9xx_set_configuration OK!!!");
 
     ack = ctp_goodix_gt9xx_get_information(&ctp_info);
 
-    if(ack == VM_DRV_TP_FALSE) {
-        vm_log_info("read information fail");
+    if (ack == VM_DRV_TP_FALSE) {
+        vm_log_error("TP read information fail");
         return VM_DRV_TP_FALSE;
     }
 
@@ -253,6 +247,7 @@ static VM_DRV_TP_BOOL ctp_goodix_gt9xx_parameters(vm_drv_tp_parameters_t* para, 
     return VM_DRV_TP_TRUE;
 }
 
+//----------------------------------------------------------------------------------------
 static VM_DRV_TP_BOOL ctp_read_one_point(VMUINT32 x_base, vm_drv_tp_single_event_t* event)
 {
     VMUINT8 point_info[CTP_POINT_INFO_LEN];
@@ -261,21 +256,20 @@ static VM_DRV_TP_BOOL ctp_read_one_point(VMUINT32 x_base, vm_drv_tp_single_event
     event->x = point_info[1] + (point_info[2] << 8);
     event->y = point_info[3] + (point_info[4] << 8);
     event->z = 32;
-    // vm_log_info( "id:%d", point_info[0]);
+    //printf("id: %d x=%d y=%d\n", point_info[0], event->x, event->y);
 
     return VM_DRV_TP_TRUE;
 }
 
+//-----------------------------------------------------------------------------------------
 static VM_DRV_TP_BOOL ctp_read_all_point(vm_drv_tp_multiple_event_t* tpes, VMUINT32 points)
 {
     VMUINT32 i = 0;
     vm_drv_tp_single_event_t get_one_point;
 
-    if((points < 1) || (points > 5)) {
-        return VM_DRV_TP_FALSE;
-    }
+    if ((points < 1) || (points > 5)) return VM_DRV_TP_FALSE;
 
-    for(i = 0; i < points; i++) {
+    for (i = 0; i < points; i++) {
         ctp_read_one_point(CTP_POINT_INFO_REG_BASE + CTP_POINT_INFO_LEN * i, &get_one_point);
         tpes->points[i].x = 239 - get_one_point.x;
         tpes->points[i].y = get_one_point.y;
@@ -285,6 +279,7 @@ static VM_DRV_TP_BOOL ctp_read_all_point(vm_drv_tp_multiple_event_t* tpes, VMUIN
     return VM_DRV_TP_TRUE;
 }
 
+//------------------------------------------------------------------------
 VM_DRV_TP_BOOL ctp_goodix_gt9xx_get_data(vm_drv_tp_multiple_event_t* tpes)
 {
     VMUINT8 lvalue = 0;
@@ -301,9 +296,9 @@ VM_DRV_TP_BOOL ctp_goodix_gt9xx_get_data(vm_drv_tp_multiple_event_t* tpes)
     model = (VMUINT32)(lvalue & CTP_STAT_NUMBER_TOUCH);
     buf_status = lvalue & 0xF0;
 
-    // vm_log_info( "model:%d buf_status:%d", model,buf_status);
+    //printf("model: %d buf_status: %d\n", model, buf_status);
 
-    if(model > 5) // goodix only support 5 fingers
+    if (model > 5) // goodix only support 5 fingers
     {
         ret = VM_DRV_TP_FALSE;
         goto exit_get_data;
@@ -311,20 +306,18 @@ VM_DRV_TP_BOOL ctp_goodix_gt9xx_get_data(vm_drv_tp_multiple_event_t* tpes)
 
     tpes->model = (VMUINT16)model; // read out all touch points coordinates.
 
-    if(model == 0) {
+    if (model == 0) {
         ret = VM_DRV_TP_FALSE;
         CTP_I2C_read(CTP_POINT_INFO_REG_BASE + 1, &lvalue, 1);
         goto exit_get_data;
     }
 
-    if(model <= 10) {
-        if((buf_status & 0x80) != 0) {
-            ctp_read_all_point(tpes, model);
-        } else {
-            goto exit_get_data;
-        }
-    } else {
-        if(model == 0x0d) {
+    if (model <= 10) {
+        if ((buf_status & 0x80) != 0) ctp_read_all_point(tpes, model);
+        else goto exit_get_data;
+    }
+    else {
+        if (model == 0x0d) {
             // TODO: check this event
         } else if(model == 0x0e) {
             // TODO: check this event
@@ -349,7 +342,7 @@ static VM_DRV_TP_BOOL ctp_goodix_gt9xx_set_device_mode(VM_DRV_TP_DEVICE_MODE mod
     ctp_info_t ctp_info;
     VMUINT8 ctp_buffer[2] = { 0 };
 
-    if(mode == VM_DRV_TP_ACTIVE_MODE) {
+    if (mode == VM_DRV_TP_ACTIVE_MODE) {
         eint_handle = vm_dcl_open(VM_DCL_GPIO, gpio_ctp_eint_pin);
         vm_dcl_control(eint_handle, VM_DCL_GPIO_COMMAND_SET_MODE_0, NULL);
         vm_dcl_control(eint_handle, VM_DCL_GPIO_COMMAND_SET_DIRECTION_OUT, NULL);
@@ -402,6 +395,13 @@ static VMUINT32 ctp_goodix_gt9xx_command(VMUINT32 cmd, void* p1, void* p2) // p1
         *dst = NULL;
 
     switch(cmd) {
+    case 8:
+        CTP_I2C_read(CTP_TOUCH_INFO_REG_BASE, &illegal, 1);
+        if((illegal & 0x80) == 0)
+            ret = 1;
+        else
+            ret = 0;
+        break;
     case VM_DRV_TP_COMMAND_GET_VERSION: // get firmware version
         if(ctp_goodix_gt9xx_get_information(&ctp_info)) {
             memcpy(tpd_raw_data, (VMUINT8*)&ctp_info, sizeof(ctp_info_t));
@@ -436,13 +436,6 @@ static VMUINT32 ctp_goodix_gt9xx_command(VMUINT32 cmd, void* p1, void* p2) // p1
 
     case VM_DRV_TP_COMMAND_DO_FW_UPDATE:
         break;
-    case 8:
-        CTP_I2C_read(CTP_TOUCH_INFO_REG_BASE, &illegal, 1);
-        if((illegal & 0x80) == 0)
-            ret = 1;
-        else
-            ret = 0;
-        break;
     default:
         ret = VM_DRV_TP_FALSE;
     }
@@ -454,16 +447,15 @@ static vm_drv_tp_function_list_t ctp_custom_func = { ctp_goodix_gt9xx_init,     
                                                      ctp_goodix_gt9xx_hisr,       ctp_goodix_gt9xx_get_data,
                                                      ctp_goodix_gt9xx_parameters, ctp_goodix_gt9xx_power,
                                                      ctp_goodix_gt9xx_command };
-
-void tp_gt9xx_init(void)
+//----------------------
+int tp_gt9xx_init(void)
 {
-
     gpio_ctp_eint_handle = vm_dcl_open(VM_DCL_EINT, 3);
 
-    if(VM_DCL_HANDLE_INVALID == gpio_ctp_eint_handle) {
-        vm_log_info("open EINT error");
-        return;
+    if (VM_DCL_HANDLE_INVALID == gpio_ctp_eint_handle) {
+        vm_log_error("TP open EINT error");
+        return -1;
     }
 
-    vm_drv_tp_setup_driver(&ctp_custom_func);
+    return vm_drv_tp_setup_driver(&ctp_custom_func);
 }

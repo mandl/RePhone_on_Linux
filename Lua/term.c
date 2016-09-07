@@ -12,8 +12,9 @@ extern int retarget_getc(int tmo);
 
 unsigned term_num_lines = 25;
 unsigned term_num_cols = 80;
-unsigned term_cx = 0;
-unsigned term_cy = 0;
+unsigned term_cx = 1;
+unsigned term_cy = 1;
+int use_term_input = 1;
 
 // Local variables
 static unsigned int skip_0A = 0;
@@ -58,7 +59,9 @@ void term_curs(int ctype)
 void term_clrscr()
 {
   term_ansi( "2J" );
-  term_cx = term_cy = 1;
+  term_ansi( "%u;%uH", 1, 1);
+  term_cx = 1;
+  term_cy = 1;
 }
 
 // Clear to end of line
@@ -287,16 +290,17 @@ int term_getch( int mode )
 int term_getstr(char *buf, int maxlen)
 {
 	int c;
-	int len = strlen(buf);
-	int x = len+1;
-	int startx = term_cx;
+	int len = 0;
+	int startx = term_cx + strlen(buf) + 1;
+	int x = 0;
+
+    term_gotoxy(term_cx, term_cy );
+    term_clreol();
+	term_putstr(buf, strlen(buf));
+
+	memset(buf, 0, maxlen);
 
     while(1) {
-        term_gotoxy( startx, term_cy );
-        term_clreol();
-        term_putstr(buf, strlen(buf));
-        term_gotoxy( startx+x-1, term_cy );
-
         c = term_getch(TERM_INPUT_WAIT);
         if (c < 0) continue;
 
@@ -310,50 +314,58 @@ int term_getstr(char *buf, int maxlen)
         		break;
 
         	case KC_BACKSPACE:
-        		if (x > 1) {
+        		if (x > 0) {
         			x--;
-        			memmove(buf+x-1, buf+x, len-x);
+        			memmove(buf+x, buf+x+1, len-x-1);
         			len--;
         			buf[len] = '\0';
         		}
+        		else continue;
         		break;
 
         	case KC_DEL:
-        		if (x <= len) {
-        			memmove(buf+x-1, buf+x, len-x);
+        		if (x < len) {
+        			memmove(buf+x, buf+x+1, len-x);
         			len--;
         			buf[len] = '\0';
         		}
+        		else continue;
         		break;
 
         	case KC_LEFT:
-        		if (x > 1) x--;
+        		if (x == 0) continue;
+        		x--;
         		break;
 
         	case KC_RIGHT:
-        		if (x <= len) x++;
+        		if (x >= len) continue;
+        		x++;
         		break;
 
         	case KC_HOME:
-        		x = 1;
+        		x = 0;
         		break;
 
         	case KC_END:
-        		x = len+1;
+        		x = len;
         		break;
 
         	default:
                 if ((c >= 32) && (c < 127)) {
                 	if (len < maxlen) {
-						if (x <= len) memmove(buf+x, buf+x-1, len-x+1);
+						if (x < len) memmove(buf+x+1, buf+x, len-x);
 						len++;
-						buf[x-1] = c;
+						buf[x] = c;
 						buf[len] = '\0';
 						x++;
                 	}
                 }
         		break;
         }
+        term_gotoxy( startx, term_cy );
+        term_clreol();
+    	term_putstr(buf, strlen(buf));
+        term_gotoxy( startx+x, term_cy );
     }
 }
 

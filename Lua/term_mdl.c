@@ -227,7 +227,7 @@ static int luaterm_getstr( lua_State* L )
     if (lua_isstring(L,4)) {
     	size_t len;
         buf = lua_tolstring( L, 4, &len );
-        snprintf(inbuf, maxlen, "%s", buf);
+        if (len < 128) snprintf(inbuf, maxlen, "%s", buf);
     }
 
     term_gotoxy( x, y );
@@ -390,7 +390,7 @@ static void show_editlines()
 			editor->line = lin + editor->first;
 			show_current_line(0);
 		}
-		else {
+		else { // blank lines after last editor line
 			term_gotoxy(1, lin + EDITOR_HEAD + 1);
 			term_clreol();
 			term_gotoxy(term_num_cols, lin + EDITOR_HEAD + 1);
@@ -727,6 +727,7 @@ static int luaterm_edit( lua_State* L )
 	// read file to buffer
 	int was_cr = 0;
 	int rd = 0;
+	int tabsize = 0;
 	do {
 		rd = file_read(ffd, buf, 128);
 		if (rd > 0) {
@@ -756,6 +757,7 @@ static int luaterm_edit( lua_State* L )
 				if (buf[i] == 9) {
 					memset(editor->buf + editor->ptr, ' ', 4);
 					editor->ptr += 4;
+					tabsize += 3;
 					continue;
 				}
 
@@ -771,9 +773,15 @@ static int luaterm_edit( lua_State* L )
 
 			if (rd < 128) goto endread;
 
+			// in the next pass we need max 4 characters
 			if ((editor->ptr + 4) >= editor->buf_size) {
-				rd = -103;
-				goto endread;
+				// need more space
+				char *newb = realloc(editor->buf, editor->buf_size + 1024);
+				if (newb == NULL) {
+					rd = -103;
+					goto endread;
+				}
+				editor->buf = newb;
 			}
 		}
 	} while (rd > 0);
@@ -787,16 +795,20 @@ endread:
 		free(editor->buf);
 		if (rd == -101) return luaL_error(L, "EOL format error, not text file");
 		else if (rd == -102) return luaL_error(L, "Non printable characters, binary file");
+		else if (rd == -103) return luaL_error(L, "Error reallocating edit buffer");
 		else return luaL_error(L, "Error reading file");
 	}
 
 	editor->size = editor->ptr;
+	int read_size = editor->ptr;
+
 	if (editor->size > 0) editor->numlines = get_numlines();
 	else {
 		sprintf(editor->buf, "\n");
 		editor->numlines = 1;
 	}
 	editor->show_lnum = 6;
+	// Set number of visible lines
 	editor->scrlin = term_get_lines() - EDITOR_HEAD - EDITOR_FOOT;
 	editor->changed = 0;
 
@@ -825,10 +837,10 @@ endread:
     	term_gotoxy( 1, term_get_lines());
     	term_clreol();
         if ((c == 'y') || (c == 'Y')) {
-    		term_putstr("Save as: ", 9);
-    		sprintf(buf, "%s", fname);
+    		sprintf(buf, "Save as [%s]: ", fname);
     		res = term_getstr(buf, 64);
     		if (res == 0) {
+    			if (strlen(buf) == 0) sprintf(buf, "%s", fname);
     			// save file
                 ffd = file_open(buf, O_CREAT);
                 if (ffd >= 0) {
@@ -843,8 +855,13 @@ endread:
     	if (res < 0) term_putstr("File not saved\n", 15);
     	else term_putstr("File saved\n", 11);
 	}
+	else {
+		if ((editor->changed == 0) && (read_size != editor->fsize) && (read_size != (editor->fsize+tabsize))) {
+			printf("Warning: file size (%d) <> read size (%d) [%d]\n", editor->fsize, read_size, read_size+tabsize);
+		}
+	}
 
-	// free buffer
+	// free editor buffer
 	free(editor->buf);
 
 	return 0;
@@ -866,7 +883,7 @@ static int file_recv( lua_State* L )
   unsigned char c, gnm;
   char fnm[64];
 
-  remote_CCall(&_fs_free_space);
+  remote_CCall(L, &_fs_free_space);
   unsigned int max_len = g_shell_result-(1024*10);
 
   gnm = 0;

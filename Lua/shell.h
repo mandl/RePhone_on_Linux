@@ -9,6 +9,7 @@
 #include "vmdcl.h"
 #include "vmbt_cm.h"
 #include "vmsock.h"
+#include "vmdcl_spi.h"
 
 #include "lua.h"
 #include "mqtt_client.h"
@@ -40,16 +41,55 @@
 #define CCALL_MESSAGE_FCHECK    344
 #define CCALL_MESSAGE_FFLUSH    346
 #define CCALL_MESSAGE_LCDWR     348
+#define CCALL_MESSAGE_SIT_LCDWR	350
+#define CCALL_MESSAGE_MALLOC	352
+#define CCALL_MESSAGE_REALLOC	354
+#define CCALL_MESSAGE_FREE		356
+#define CCALL_MESSAGE_TICK		358
 #define CB_MESSAGE_ID		    400
+
+typedef struct
+{
+	VM_DCL_HANDLE g_spi_cs_handle;
+	VM_DCL_HANDLE g_spi_dc_handle;
+	VMUINT32 cs_pin_mask;
+	VMUINT32 dc_pin_mask;
+    int pmd;
+	vm_dcl_spi_config_parameter_t conf_data;
+	vm_dcl_spi_mode_t spi_data_mode;
+} t_spi_params;
+
+typedef struct
+{
+    uint8_t out_type;
+    uint8_t deact_cs;
+    uint8_t send_as_cmd;
+    uint8_t read_while_write;
+    uint8_t rwb;
+} t_spi_arg;
+
+typedef struct {
+    int			wdgtmo;
+    int			cheapsize;
+    int			res1;
+    int			res2;
+    int			res3;
+    int			res4;
+    int			res5;
+    VMUINT16	res6;
+    VMUINT16	crc;
+} sysvar_t;
 
 typedef struct {
     VM_TIMER_ID_PRECISE timer_id;
     int					cb_ref;
+    VMUINT32			interval;
     VMUINT32			runs;
     VMUINT32			pruns;
     VMUINT32			failed;
     VMUINT8				busy;
-    VMUINT8				paused;
+    VMUINT8				state;
+    VMUINT8				last_state;
 } timer_info_t;
 
 typedef struct {
@@ -92,7 +132,8 @@ typedef enum
 	CB_FUNC_MQTT_DISCONNECT,
 	CB_FUNC_UART_RECV,
 	CB_FUNC_NET,
-	CB_FUNC_EINT
+	CB_FUNC_EINT,
+	CB_FUNC_TOUCH
 } CB_FUNC_TYPE;
 
 
@@ -103,6 +144,7 @@ typedef struct {
 	int		ipar2;
 	int		ipar3;
 	int		busy;
+	uint32_t upar1;
 } cfunc_params_t;
 
 typedef struct {
@@ -134,6 +176,14 @@ typedef struct {
 
 typedef struct {
 	int		cb_ref;
+	int		event;
+	int		x;
+	int		y;
+	int		busy;
+} cb_func_param_touch_t;
+
+typedef struct {
+	int		cb_ref;
 	int		recv_ref;
 	int		connect_ref;
 	int		disconnect_ref;
@@ -150,16 +200,19 @@ typedef struct {
 typedef struct {
 	int		cb_ref;
 	int		len;
+	int		maxlen;
 	int		more;
 	char    *reply;
-	int		busy;
+	int		ffd;
+	VMUINT8	busy;
+	VMUINT8	state;
 } cb_func_param_httpsdata_t;
 
 typedef struct {
 	int		cb_ref;
 	int		len;
 	char    *header;
-	int		busy;
+	VMUINT8	busy;
 } cb_func_param_httpsheader_t;
 
 typedef struct {
@@ -218,15 +271,25 @@ VM_DCL_HANDLE retarget_usb_handle;
 VM_DCL_HANDLE retarget_uart1_handle;
 int retarget_target;
 
+int g_rtc_poweroff;
+
 vm_mutex_t retarget_rx_mutex;
 
 VMINT32 shell_thread(VM_THREAD_HANDLE thread_handle, void* user_data);
 VMINT32 tty_thread(VM_THREAD_HANDLE thread_handle, void* user_data);
 void l_message (const char *pname, const char *msg);
 //void shell_docall(lua_State *L);
-int remote_CCall(lua_CFunction func);
+int remote_CCall(lua_State *L, lua_CFunction func);
 void remote_lua_call(VMUINT16 type, void *params);
 int file_exists(const char *filename);
+void full_fname(char *fname, VMWCHAR *ucs_name, int size);
+int file_open(const char* file, int flags);
+int file_close(int file);
+int file_size(int file);
+int file_flush(int file);
+int file_read(int file, char* ptr, int len);
+int file_write(int file, char* ptr, int len);
+int file_seek(int file, int offset, int whence);
 
 //void _mutex_lock(void);
 //void _mutex_unlock(void);

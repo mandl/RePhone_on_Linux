@@ -1,0 +1,28 @@
+=== Ver.: 1.0.8    03/09/2016 ===
+- mqtt module, password max length is now 63 (was 31)
+- some bug fixes and improvements in spi module
+- initial support for resistive touch screen (XPT2046)
+- some minor bug fixes
+
+=== Ver.: 1.0.7    27/08/2016 ===
+- fixed bug in term.edit(), not saving under default name
+- advanced line input mode set as default
+- some minor bug fixes
+- documentation updated with more info on installation and usage, some errors corrected
+
+=== Ver.: 1.0.6    26/08/2016 ===
+- https module upgraded, new functionality added, some bugs fixed
+- documentation for https module updated
+
+=== Ver.: 1.0.5    25/08/2016 ===
+- BME280 sensor added to sensor module
+- documentation for sensor module updated
+- some minor bug fixes
+
+=== Ver.: 1.0.4    21/08/2016 ===
+- Fixes in audio module
+- audio: recording added
+- documentation for audio module updated
+
+=== Ver.: 1.0.3    21/08/2016 ===
+- Fix bugs in Xadow Touch panel handling (Lua callback function), fix touch in landscape mode

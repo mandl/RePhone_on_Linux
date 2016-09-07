@@ -17,7 +17,8 @@
 
 
 #define LUA_VERSION	"Lua 5.1.4"
-#define LUA_RELEASE	"LuaRephone 1.0.1 Beta"
+#define LUA_RELEASE	"LuaRephone 1.0.8"
+#define LUA_RELEASE_DATE "2016/09/03"
 #define LUA_VERSION_NUM	501
 #define LUA_COPYRIGHT	"Copyright (C) 1994-2011 Lua.org, PUC-Rio, 2016 LoBo"
 #define LUA_AUTHORS 	"R. Ierusalimschy, L. H. de Figueiredo & W. Celes, LoBo"
@@ -50,6 +51,7 @@
 typedef struct lua_State lua_State;
 
 typedef int (*lua_CFunction) (lua_State *L);
+typedef int (*lua_CFunctionN) (void);
 
 
 /*

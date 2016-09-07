@@ -3,10 +3,10 @@ WORKSPACE_PATH = ../
 
 PROJECT = lua
 
-OBJECTS += main.o retarget.o shell.o audio.o bt.o gsm.o timer.o gpio.o i2c.o spi.o net.o https.o sntp.o struct.o sensor.o
+OBJECTS += main.o retarget.o shell.o audio.o bt.o gsm.o timer.o gpio.o i2c.o spi.o net.o https.o sntp.o struct.o sensor.o bme280.o
 OBJECTS += screen.o lua_cjson.o fpconv.o strbuf.o md5.o sha1.o sha2.o bit.o
 OBJECTS += mqtt.o mqtt_client.o mqtt_packet.o mqtt_socket.o mqttnet.o email.o ftp.o
-OBJECTS += lcd.o DefaultFonts.o DefaultPropFont.o tjpgd.o term.o term_mdl.o
+OBJECTS += lcd.o DefaultFont.o tjpgd.o term.o term_mdl.o
 
 OBJECTS += lua/lapi.o lua/lcode.o lua/ldebug.o lua/ldo.o lua/ldump.o lua/lfunc.o lua/lgc.o lua/llex.o \
 lua/lmem.o lua/lobject.o lua/lopcodes.o lua/lparser.o lua/lstate.o lua/lstring.o lua/ltable.o lua/ltm.o \
@@ -27,7 +27,8 @@ OBJECTS += $(WORKSPACE_PATH)common/lcd_sitronix_st7789s.o $(WORKSPACE_PATH)commo
 SYS_OBJECTS += $(WORKSPACE_PATH)common/gccmain.o
 INCLUDE_PATHS += -I. -I$(WORKSPACE_PATH)include -I$(WORKSPACE_PATH)common
 LIBRARY_PATHS += -L$(WORKSPACE_PATH)lib
-LIBRARIES += $(WORKSPACE_PATH)lib/LINKIT10/armgcc/percommon.a -lm
+LIBRARIES += $(WORKSPACE_PATH)lib/LINKIT10/armgcc/libmtk.a -lm
+#LIBRARIES += $(WORKSPACE_PATH)lib/LINKIT10/armgcc/percommon.a -lm
 LINKER_SCRIPT = $(WORKSPACE_PATH)lib/LINKIT10/armgcc/scat.ld
 
 ###############################################################################

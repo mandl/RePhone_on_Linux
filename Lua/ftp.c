@@ -509,7 +509,7 @@ static int ftp_connect(lua_State *L)
     g_shell_result = -9;
 	CCwait = 20000;
 
-	remote_CCall(&_ftp_connect);
+	remote_CCall(L, &_ftp_connect);
 
 	if (g_shell_result < 0) {
 		_close(9);
@@ -535,7 +535,7 @@ static int ftp_disconnect(lua_State *L)
     g_shell_result = -9;
 	CCwait = 5000;
 
-	remote_CCall(&_ftp_disconnect);
+	remote_CCall(L, &_ftp_disconnect);
 
 	if (g_shell_result < 0) lua_pushinteger(L, -1); // no response or error
 	else lua_pushinteger(L, 0);
@@ -657,7 +657,7 @@ int _ftp_list(lua_State* L)
 		else {
 			ftp->totable = 0;
 			VMWCHAR ucs_name[128];
-			vm_chset_ascii_to_ucs2(ucs_name, 128, filename);
+		    full_fname((char *)filename, ucs_name, 128);
 			int res = vm_fs_open(ucs_name, VM_FS_MODE_CREATE_ALWAYS_WRITE, VM_TRUE);
 			if (res < 0) {
 				vm_log_error("error creating local file: %d", res);
@@ -693,7 +693,7 @@ static int ftp_list(lua_State *L)
 	g_shell_result = -9;
 	CCwait = 10000;
 
-	remote_CCall(&_ftp_list);
+	remote_CCall(L, &_ftp_list);
 
 	if (g_shell_result < 0) {
 		lua_pushinteger(L, g_shell_result); // no response or error
@@ -701,11 +701,11 @@ static int ftp_list(lua_State *L)
 	}
 	else {
 		if (ftp->file_handle >= 0) {
-			remote_CCall(&_ftp_closefile);
+			remote_CCall(L, &_ftp_closefile);
 			return 1;
 		}
 		else {
-			remote_CCall(&_ftp_getstring);
+			remote_CCall(L, &_ftp_getstring);
 			return 2;
 		}
 	}
@@ -745,7 +745,7 @@ int _ftp_recv(lua_State* L)
 
 	if (tofile) {
 		VMWCHAR ucs_name[128];
-		vm_chset_ascii_to_ucs2(ucs_name, 128, lfilename);
+	    full_fname(lfilename, ucs_name, 128);
 		int res = vm_fs_open(ucs_name, VM_FS_MODE_CREATE_ALWAYS_WRITE, VM_TRUE);
 		if (res < 0) {
 	    	vm_log_error("error creating local file: %d", res);
@@ -780,7 +780,7 @@ static int ftp_recv(lua_State *L)
 
 	g_shell_result = -9;
 	CCwait = 30000;
-	remote_CCall(&_ftp_recv);
+	remote_CCall(L, &_ftp_recv);
 
 	if (g_shell_result < 0) {
 		lua_pushinteger(L, g_shell_result); // no response or error
@@ -788,11 +788,11 @@ static int ftp_recv(lua_State *L)
 	}
 	else {
 		if (ftp->file_handle >= 0) {
-			remote_CCall(&_ftp_closefile);
+			remote_CCall(L, &_ftp_closefile);
 			return 1;
 		}
 		else {
-			remote_CCall(&_ftp_getstring);
+			remote_CCall(L, &_ftp_getstring);
 			return 2;
 		}
 	}
@@ -815,14 +815,14 @@ static int ftp_pwd(lua_State *L)
 	g_shell_result = -9;
 	CCwait = 5000;
 
-	remote_CCall(&_ftp_pwd);
+	remote_CCall(L, &_ftp_pwd);
 
 	if (g_shell_result < 0) {
 		lua_pushinteger(L, g_shell_result); // no response or error
 		return 1;
 	}
 	else {
-		remote_CCall(&_ftp_getstring);
+		remote_CCall(L, &_ftp_getstring);
 		return 2;
 	}
 }
@@ -853,7 +853,7 @@ static int ftp_cwd(lua_State *L)
 	g_shell_result = -9;
 	CCwait = 5000;
 
-	remote_CCall(&_ftp_cwd);
+	remote_CCall(L, &_ftp_cwd);
 
 	if (g_shell_result < 0) {
 		lua_pushinteger(L, g_shell_result); // no response or error
@@ -884,7 +884,7 @@ int _ftp_send(lua_State* L)
 	const char *source = luaL_checklstring(L, 1, &slen);
 	if ((slen < 64) && (slen > 0)) {
 		VMWCHAR ucs_name[128];
-		vm_chset_ascii_to_ucs2(ucs_name, 128, source);
+	    full_fname((char *)source, ucs_name, 128);
 		fhndl = vm_fs_open(ucs_name, VM_FS_MODE_READ, VM_TRUE);
 		if (fhndl >= 0) fromfile = 1;
 	}
@@ -967,13 +967,13 @@ static int ftp_send(lua_State *L)
 
 	g_shell_result = -9;
 	CCwait = 30000;
-	remote_CCall(&_ftp_send);
+	remote_CCall(L, &_ftp_send);
 
 	if (g_shell_result < 0) {
 		if (ftp->file_handle >= 0) vm_fs_close(ftp->file_handle);
 		lua_pushnil(L); // no response or error
 	}
-	else remote_CCall(&_ftp_closesend);
+	else remote_CCall(L, &_ftp_closesend);
 
 	return 1;
 }
